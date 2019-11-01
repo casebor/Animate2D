@@ -52,7 +52,7 @@ GLuint programIDCircle;
 GLuint vao[3];
 
 // ----- TRIANGLE FAN CIRCLE
-const unsigned DIV_COUNT = 360;
+const unsigned numStepsFan = 360;
 
 // ----- TRIANGLE FAN WINGS
 const unsigned numSteps = 30;
@@ -128,7 +128,7 @@ int main(int, char**) {
         // ----- DRAW TRIANGLE FAN - CIRCLE
         glUseProgram(programIDCircle);
         glBindVertexArray(vao[0]);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, DIV_COUNT + 2);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, numStepsFan + 2);
 
         // ----- DRAW TRIANGLE FAN - WINGS
         // Right wing
@@ -167,7 +167,8 @@ void init() {
 	quadInit(quad);
 
     loadTexture(cat, "nyancat.png");
-    loadTexture(night, "night.png");
+    //loadTexture(night, "night.png");
+    loadTexture(night, "background.png");
 
 
     // ----- SUN
@@ -211,7 +212,7 @@ void init() {
     glBindVertexArray(vao[0]);
     glEnableVertexAttribArray(0);
 
-    GLfloat* coordA = new GLfloat[(DIV_COUNT + 2) * 2];
+    GLfloat* coordA = new GLfloat[(numStepsFan + 2) * 2];
 
     // Declare offset and radius
     float offsetX = 0.6f;
@@ -224,7 +225,7 @@ void init() {
     coordA[coordIdx++] = 0.0f;
 
     // Angle increments between each point
-    float angInc = 2.0f * M_PI / static_cast<float>(DIV_COUNT);
+    float angInc = 2.0f * M_PI / static_cast<float>(numStepsFan);
     float cosInc = cos(angInc);
     float sinInc = sin(angInc);
 
@@ -235,7 +236,7 @@ void init() {
     // Remaining points (determined via angle)
     float xc = radius;
     float yc = 0.0f;
-    for (unsigned iDiv = 1; iDiv < DIV_COUNT; ++iDiv) {
+    for (unsigned iDiv = 1; iDiv < numStepsFan; ++iDiv) {
         float xcNew = cosInc * xc - sinInc * yc;
 
         yc = sinInc * xc + cosInc * yc;
@@ -251,7 +252,7 @@ void init() {
 
     // Apply offset
     coordIdx = 0;
-    for (unsigned iDiv = 1; iDiv <= DIV_COUNT + 2; ++iDiv) {
+    for (unsigned iDiv = 1; iDiv <= numStepsFan + 2; ++iDiv) {
         coordA[coordIdx++] += offsetX;
         coordA[coordIdx++] += offsetY;
     }
@@ -259,7 +260,7 @@ void init() {
     GLuint vboCircle = 0;
     glGenBuffers(1, &vboCircle);
     glBindBuffer(GL_ARRAY_BUFFER, vboCircle);
-    glBufferData(GL_ARRAY_BUFFER, (DIV_COUNT + 2) * 2 * sizeof(GLfloat), coordA, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, (numStepsFan + 2) * 2 * sizeof(GLfloat), coordA, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(0);
 
