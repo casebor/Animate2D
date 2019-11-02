@@ -5,49 +5,44 @@
 
 using namespace OpenGP;
 
-const int width = 720, height = 720;
-typedef Eigen::Transform<float, 3, Eigen::Affine> Transform;
-
-const char* fb_vshader =
+// Shader constants
+static const char* fb_vshader =
 #include "fb_vshader.glsl"
 ;
-const char* fb_fshader =
+static const char* fb_fshader =
 #include "fb_fshader.glsl"
 ;
-const char* quad_vshader =
+static const char* quad_vshader =
 #include "quad_vshader.glsl"
 ;
-const char* quad_fshader =
+static const char* quad_fshader =
 #include "quad_fshader.glsl"
 ;
 
-const float SpeedFactor = 1;
+// Function stubs
 void init();
 void quadInit(std::unique_ptr<GPUMesh>& quad);
 void loadTexture(std::unique_ptr<RGBA8Texture>& texture, const char* filename);
 Vec3 getPointBezier(Vec3, Vec3, Vec3, Vec3, float);
-void drawScene(float timeCount);
+void drawBackground();
 
-std::unique_ptr<GPUMesh> quad;
+// Initialize Shaders
+static std::unique_ptr<GPUMesh> quad;
+static std::unique_ptr<Shader> quadShader;
+static std::unique_ptr<Shader> fbShader;
 
-std::unique_ptr<Shader> quadShader;
-std::unique_ptr<Shader> fbShader;
+// Scene objects
+static std::unique_ptr<RGBA8Texture> background;
+static Mesh snitch;
 
-std::unique_ptr<RGBA8Texture> cat;
-std::unique_ptr<RGBA8Texture> background;
-Mesh sun;
-Mesh circle;
-Mesh snitch;
-
-/// TODO: declare Framebuffer and color buffer texture
-
-std::unique_ptr<Framebuffer> fb;
-std::unique_ptr<RGBA8Texture> c_buf;
+// Framebuffers and Textures
+static std::unique_ptr<Framebuffer> fb;
+static std::unique_ptr<RGBA8Texture> c_buf;
 
 // Control variables
-bool flag;
-int signFlag = -1;
-
+static bool flag;
+const int width = 720, height = 720;
+typedef Eigen::Transform<float, 3, Eigen::Affine> Transform;
 
 
 int main(int, char**) {
@@ -55,35 +50,35 @@ int main(int, char**) {
 	Application app;
 	init();
 
-	/// TODO: initialize framebuffer
+    // Initialize framebuffer
 	fb = std::unique_ptr<Framebuffer>(new Framebuffer());
 
-	/// TODO: initialize color buffer texture, and allocate memory
+    // Initialize color buffer texture, and allocate memory
 	c_buf = std::unique_ptr<RGBA8Texture>(new RGBA8Texture());
 	c_buf->allocate(width, height);
 
-	/// TODO: attach color texture to framebuffer
+    // Attach color texture to framebuffer
 	fb->attach_color_texture(*c_buf);
 
-    /// Time offset
-    float timeOffset = glfwGetTime();
+    // Time offset
+    float timeOffset = static_cast<float>(glfwGetTime());
     int timeAdj = 0.0;
 
 	Window& window = app.create_window([&](Window&) {
 		glViewport(0, 0, width, height);
 
-		/// TODO: First draw the scene onto framebuffer
-		/// bind and then unbind framebuffer
+        // ----- Setup background
+        // Bind framebuffer and draw background
 		fb->bind();
 		glClear(GL_COLOR_BUFFER_BIT);
-		drawScene(glfwGetTime());
+        drawBackground();
 		fb->unbind();
 
-		/// Render to Window, uncomment the lines and do TODOs
-		glViewport(0, 0, width, height);
+        // Render window and bind shader
 		glClear(GL_COLOR_BUFFER_BIT);
 		fbShader->bind();
-		/// TODO: Bind texture and set uniforms
+
+        // Bind texture background
 		glActiveTexture(GL_TEXTURE0);
 		c_buf->bind();
 		fbShader->set_uniform("tex", 0);
@@ -102,9 +97,9 @@ int main(int, char**) {
         OpenGP::Vec3 endPointPath = OpenGP::Vec3(-0.8f, 1.0f, 0.0f);
         float time_s;
         if (flag) {
-            time_s = glfwGetTime() - timeOffset;
+            time_s = static_cast<float>(glfwGetTime()) - timeOffset;
         } else {
-            timeOffset = glfwGetTime();
+            timeOffset = static_cast<float>(glfwGetTime());
             time_s = 0.0f;
             flag = true;
         }
@@ -113,11 +108,10 @@ int main(int, char**) {
 
         // Add looping ability
         if (time_s > timeInterval) {
-            timeAdj = floor(time_s / timeInterval);
+            timeAdj = static_cast<int>(floor(time_s / timeInterval));
         }
 
         float tPathPosition = (time_s - (timeAdj * timeInterval)) / timeInterval;
-
 
         // Calculate Bezier path
         OpenGP::Vec3 tempPosition;
@@ -135,48 +129,46 @@ int main(int, char**) {
         // Initialize transformation matrix
         Transform snitch_m = Transform::Identity();
 
-        // Position in Transformation
+        // Transform and scale
         snitch_m *= Eigen::Translation3f(pointX, pointY, 0.0);
-
-        // Rotate
-        //circle_m *= Eigen::AngleAxisf(freq/CIRCLE_ROT_PERIOD, Eigen::Vector3f::UnitZ());
-
         snitch_m *= Eigen::AlignedScaling3f(tPathPosition, tPathPosition, 1.0);
 
         // ----- Setup transformation hierarchies for Wings
-
-        // Draw snitch
+        // Draw snitch body
         snitch.draw(snitch_m.matrix(), 2);
 
-        // Add rotating factor befone rendering wings rad = 0.04
+        // Add rotating factor befone rendering wings
         Transform snitch_mRightWing = snitch_m;
         Transform snitch_mLeftWing = snitch_m;
 
         float oscillationSpeed = 0.005f;
         int orbitalFactor = 40;
-        int currRotation = (int)floor(time_s / oscillationSpeed) % orbitalFactor;
-        if ((int)(floor(time_s / oscillationSpeed)) % orbitalFactor > 15) {
-            snitch_mLeftWing *= Eigen::AngleAxisf((float)(orbitalFactor - currRotation) / (float)orbitalFactor, Eigen::Vector3f::UnitZ());
-            snitch_mRightWing *= Eigen::AngleAxisf(-(float)(orbitalFactor - currRotation) / (float)orbitalFactor, Eigen::Vector3f::UnitZ());
+        int currRotation = static_cast<int>(floor(time_s / oscillationSpeed)) % orbitalFactor;
+
+        // Smooth rotation of wings
+        if (static_cast<int>((floor(time_s / oscillationSpeed))) % orbitalFactor > (orbitalFactor / 2)) {
+            snitch_mLeftWing *= Eigen::AngleAxisf(static_cast<float>((orbitalFactor - currRotation)) /
+                                                  static_cast<float>(orbitalFactor), Eigen::Vector3f::UnitZ());
+            snitch_mRightWing *= Eigen::AngleAxisf(-static_cast<float>((orbitalFactor - currRotation)) /
+                                                   static_cast<float>(orbitalFactor), Eigen::Vector3f::UnitZ());
         } else {
-            snitch_mLeftWing *= Eigen::AngleAxisf((float)currRotation / (float)orbitalFactor, Eigen::Vector3f::UnitZ());
-            snitch_mRightWing *= Eigen::AngleAxisf(-(float)currRotation / (float)orbitalFactor, Eigen::Vector3f::UnitZ());
+            snitch_mLeftWing *= Eigen::AngleAxisf(static_cast<float>(currRotation) / static_cast<float>(orbitalFactor), Eigen::Vector3f::UnitZ());
+            snitch_mRightWing *= Eigen::AngleAxisf(-static_cast<float>(currRotation) / static_cast<float>(orbitalFactor), Eigen::Vector3f::UnitZ());
         }
 
         snitch.draw(snitch_mRightWing.matrix(), 0);
         snitch.draw(snitch_mLeftWing.matrix(), 1);
-
 	});
 
-    window.set_title("FrameBuffer");
+    window.set_title("Golden Snitch Animation");
 	window.set_size(width, height);
 
 	return app.run();
 }
 
+// Initialize scene
 void init() {
-	glClearColor(1, 1, 1, /*solid*/1.0);
-
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     // ----- LOAD SHADERS
 	fbShader = std::unique_ptr<Shader>(new Shader());
@@ -193,14 +185,11 @@ void init() {
 
 	quadInit(quad);
 
-    loadTexture(cat, "nyancat.png");
     loadTexture(background, "background.png");
 
-
-    // ----- CIRCLE
+    // ----- SNITCH
     snitch.init();
     snitch.loadVertices();
-
 
     // ----- BACKGROUND
     std::vector<OpenGP::Vec3> quadVert;
@@ -251,7 +240,7 @@ void quadInit(std::unique_ptr<GPUMesh>& quad) {
 void loadTexture(std::unique_ptr<RGBA8Texture>& texture, const char* filename) {
 	// Used snippet from https://raw.githubusercontent.com/lvandeve/lodepng/master/examples/example_decode.cpp
 	std::vector<unsigned char> image; //the raw pixels
-	unsigned width, height;
+    unsigned width, height;
 	//decode
 	unsigned error = lodepng::decode(image, width, height, filename);
 	//if there's an error, display it
@@ -265,7 +254,7 @@ void loadTexture(std::unique_ptr<RGBA8Texture>& texture, const char* filename) {
 		memcpy(&image[4 * i * width], &image[image.size() - 4 * (i + 1) * width], 4 * width * sizeof(unsigned char));
 		memcpy(&image[image.size() - 4 * (i + 1) * width], row, 4 * width * sizeof(unsigned char));
 	}
-	delete row;
+    delete[] row;
 
 	texture = std::unique_ptr<RGBA8Texture>(new RGBA8Texture());
 	texture->upload_raw(width, height, &image[0]);
@@ -286,57 +275,27 @@ Vec3 getPointBezier(Vec3 startPoint, Vec3 controlPointA, Vec3 controlPointB, Vec
 }
 
 // Draw the scene
-void drawScene(float timeCount)
+void drawBackground()
 {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	float t = timeCount * SpeedFactor;
 	Transform TRS = Transform::Identity();
 	quadShader->bind();
 	quadShader->set_uniform("M", TRS.matrix());
-	// Make texture unit 0 active
+
+    // Activate texture and bind
     glActiveTexture(GL_TEXTURE0);
-	// Bind the texture to the active unit for drawing
     background->bind();
-	// Set the shader's texture uniform to the index of the texture unit we have
-	// bound the texture to
+
+    // Set attributes and draw
 	quadShader->set_uniform("tex", 0);
 	quad->set_attributes(*quadShader);
     quad->draw();
+
     background->unbind();
-
-	float xcord = 0.7 * std::cos(t);
-	float ycord = 0.7 * std::sin(t);
-	TRS *= Eigen::Translation3f(xcord, ycord, 0);
-	TRS *= Eigen::AngleAxisf(t + M_PI / 2, Eigen::Vector3f::UnitZ());
-	TRS *= Eigen::AlignedScaling3f(0.2f, 0.2f, 1);
-
-	quadShader->bind();
-	quadShader->set_uniform("M", TRS.matrix());
-	// Make texture unit 0 active
-    glActiveTexture(GL_TEXTURE0);
-	// Bind the texture to the active unit for drawing
-    cat->bind();
-	// Set the shader's texture uniform to the index of the texture unit we have
-	// bound the texture to
-	quadShader->set_uniform("tex", 0);
-	quad->set_attributes(*quadShader);
-
-    //quad->draw();
-    cat->unbind();
     quadShader->unbind();
-
-
-
-
-
-
-
-
     glDisable(GL_BLEND);
-
-
 }
 
 

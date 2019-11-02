@@ -16,9 +16,7 @@ float rgb_2_luma(vec3 c){ return .3*c[0] + .59*c[1] + .11*c[2]; }
 
 void main() {
 #ifdef GAUSSIAN
-    ///--- Gaussian convolution
-    float std = 2; ///< standard deviation (<.3 disable)
-    // float std = .1; ///< standard deviation (<.3 disable)
+    float std = 2;
     vec3 color_tot = vec3(0,0,0);
     float weight_tot = 0;
     int SIZE = 1 + 2 * 3 * int( ceil(std) );
@@ -30,17 +28,17 @@ void main() {
             weight_tot += w;
         }
     }
-    color = color_tot / weight_tot; ///< ensure \int w = 1
+    color = color_tot / weight_tot;
 #endif
 
 #ifdef SOBEL
     float t_00 = rgb_2_luma( textureOffset(tex, uv, ivec2(-1, -1)).rgb );
     float t_01 = rgb_2_luma( textureOffset(tex, uv, ivec2(-1,  0)).rgb );
     float t_02 = rgb_2_luma( textureOffset(tex, uv, ivec2(-1, +1)).rgb );
-    ///--- x=0
+
     float t_10 = rgb_2_luma( textureOffset(tex, uv, ivec2( 0, -1)).rgb );
     float t_12 = rgb_2_luma( textureOffset(tex, uv, ivec2( 0, +1)).rgb );
-    ///--- x=+1
+
     float t_20 = rgb_2_luma( textureOffset(tex, uv, ivec2(+1, -1)).rgb );
     float t_21 = rgb_2_luma( textureOffset(tex, uv, ivec2(+1,  0)).rgb );
     float t_22 = rgb_2_luma( textureOffset(tex, uv, ivec2(+1, +1)).rgb );
