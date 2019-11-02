@@ -33,8 +33,10 @@ std::unique_ptr<Shader> quadShader;
 std::unique_ptr<Shader> fbShader;
 
 std::unique_ptr<RGBA8Texture> cat;
-std::unique_ptr<RGBA8Texture> night;
+std::unique_ptr<RGBA8Texture> background;
 Mesh sun;
+Mesh circle;
+Mesh snitch;
 
 /// TODO: declare Framebuffer and color buffer texture
 
@@ -100,18 +102,15 @@ int main(int, char**) {
         quad->set_attributes(*fbShader);
         quad->draw();
 
-        //drawCircle(width/2, height/2, 0, 120, 360);
-        //drawPoly();
-
         // ----- DRAW SUN
-        float time_s = glfwGetTime();
-        float freq = 3.14 * time_s * 1;
-        Transform sun_M = Transform::Identity();
-        sun_M *= Eigen::Translation3f(0.5, 0.5, 0.0);
+        //float time_s = glfwGetTime();
+        //float freq = 3.14 * time_s * 1;
+        //Transform sun_M = Transform::Identity();
+        //sun_M *= Eigen::Translation3f(0.5, 0.5, 0.0);
         //sun_M *= Eigen::AngleAxisf(-freq/30, Eigen::Vector3f::UnitZ());
         //scale_t: make the sun become bigger and smaller over the time!
         //float scale_t = 0.01*std::sin(freq);
-        sun_M *= Eigen::AlignedScaling3f(0.2, 0.2, 1.0);
+        //sun_M *= Eigen::AlignedScaling3f(0.2, 0.2, 1.0);
         //sun.draw(sun_M.matrix());
 
 
@@ -119,30 +118,42 @@ int main(int, char**) {
 		fbShader->unbind();
 
 
-        // ----- DRAW TRIANGLE
-        //glUseProgram(programID);
-        //glBindVertexArray(vao);
-        //glDrawArrays(GL_TRIANGLES, 0, 3);
+        // ----- Setup transformation hierarchies
+        float time_s = glfwGetTime();
+        float freq = 3.14 * time_s * 1;
+        const int CIRCLE_ROT_PERIOD = 30;
+
+        Transform circle_m = Transform::Identity();
+        circle_m *= Eigen::Translation3f(0.0, 0.0, 0.0);
+        circle_m *= Eigen::AngleAxisf(-freq/CIRCLE_ROT_PERIOD, Eigen::Vector3f::UnitZ());
+        //scale_t: make the sun become bigger and smaller over the time!
+        float scale_t = 0.01*std::sin(freq);
+       // circle_m *= Eigen::AlignedScaling3f(0.2 +scale_t, 0.2 +scale_t, 1.0);
+
+        circle.draw(circle_m.matrix(), 0);
+        circle.draw(circle_m.matrix(), 1);
 
 
         // ----- DRAW TRIANGLE FAN - CIRCLE
-        glUseProgram(programIDCircle);
-        glBindVertexArray(vao[0]);
-        glDrawArrays(GL_TRIANGLE_FAN, 0, numStepsFan + 2);
+        //glUseProgram(programIDCircle);
+        //glBindVertexArray(vao[0]);
+        //glDrawArrays(GL_TRIANGLE_FAN, 0, numStepsFan + 2);
 
         // ----- DRAW TRIANGLE FAN - WINGS
         // Right wing
-        glUseProgram(programIDWingRight);
-        glBindVertexArray(vao[1]);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
+        //glUseProgram(programIDWingRight);
+        //glBindVertexArray(vao[1]);
+        //glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
 
         // Left wing
-        glUseProgram(programIDWingLeft);
-        glBindVertexArray(vao[2]);
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
+        //glUseProgram(programIDWingLeft);
+        //glBindVertexArray(vao[2]);
+        //glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
+
 
 
 	});
+
     window.set_title("FrameBuffer");
 	window.set_size(width, height);
 
@@ -167,12 +178,16 @@ void init() {
 	quadInit(quad);
 
     loadTexture(cat, "nyancat.png");
-    //loadTexture(night, "night.png");
-    loadTexture(night, "background.png");
+    loadTexture(background, "background.png");
+
+
+    // ----- CIRCLE
+    circle.init();
+    circle.loadVertices();
 
 
     // ----- SUN
-    sun.init();
+    //sun.init();
 
     std::vector<OpenGP::Vec3> quadVert;
     quadVert.push_back(OpenGP::Vec3(-1.0f, -1.0f, 0.0f));
@@ -186,22 +201,23 @@ void init() {
     quadInd.push_back(0);
     quadInd.push_back(2);
     quadInd.push_back(3);
-    sun.loadVertices(quadVert, quadInd);
+    //sun.loadVertices(quadVert, quadInd);
 
     std::vector<OpenGP::Vec2> quadTCoord;
     quadTCoord.push_back(OpenGP::Vec2(0.0f, 0.0f));
     quadTCoord.push_back(OpenGP::Vec2(1.0f, 0.0f));
     quadTCoord.push_back(OpenGP::Vec2(1.0f, 1.0f));
     quadTCoord.push_back(OpenGP::Vec2(0.0f, 1.0f));
-    sun.loadTexCoords(quadTCoord);
+    //sun.loadTexCoords(quadTCoord);
 
-    sun.loadTextures("sun.png");
+    //sun.loadTextures("sun.png");
 
 
 
 
     // ==== GOLDEN SNITCH RENDERING -----------------
     // ---- CIRCLE VIA TRIANGLE FAN -----------------
+
 
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     programIDCircle = OpenGP::load_shaders("vshader.glsl", "fshader.glsl");
@@ -422,6 +438,7 @@ void init() {
     glBufferData(GL_ARRAY_BUFFER, (numSteps - 1) * 2 * 2 * sizeof(GLfloat), pointTotalLeft, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
     glEnableVertexAttribArray(0);
+
 }
 
 // Initialize quad (background)
@@ -498,13 +515,13 @@ void drawScene(float timeCount)
 	// Make texture unit 0 active
     glActiveTexture(GL_TEXTURE0);
 	// Bind the texture to the active unit for drawing
-	night->bind();
+    background->bind();
 	// Set the shader's texture uniform to the index of the texture unit we have
 	// bound the texture to
 	quadShader->set_uniform("tex", 0);
 	quad->set_attributes(*quadShader);
     quad->draw();
-	night->unbind();
+    background->unbind();
 
 	float xcord = 0.7 * std::cos(t);
 	float ycord = 0.7 * std::sin(t);
