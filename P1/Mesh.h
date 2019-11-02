@@ -16,10 +16,12 @@ protected:
     GLuint _vpoint;    ///< vertices buffer
     GLuint _vnormal;   ///< normals buffer
     GLuint _tcoord;    ///< texture coordinates buffer
+    GLuint vboCircle;
     GLuint vboWingRight;
     GLuint vboWingLeft;
     unsigned int numVertices;
     unsigned int numSteps = 360;
+    unsigned numStepsFan = 360;
 
     bool hasNormals;
     bool hasTextures;
@@ -46,9 +48,71 @@ public:
     void loadVertices() {
 
         // ==== GOLDEN SNITCH RENDERING -----------------
+        // ---- CIRCLE VIA TRIANGLE FAN -----------------
 
 
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        _pid[2] = OpenGP::load_shaders("Mesh_vshader.glsl", "Mesh_fshader.glsl");
+        glUseProgram(_pid[2]);
 
+        _vao[2] = 0;
+        glGenVertexArrays(1, &_vao[2]);
+        glBindVertexArray(_vao[2]);
+        glEnableVertexAttribArray(0);
+
+        GLfloat* coordA = new GLfloat[(numStepsFan + 2) * 2];
+
+        // Declare offset and radius
+        float offsetX = 0.0f;
+        float offsetY = 0.0f;
+        float radius = 0.04f;
+
+        // Origin
+        unsigned coordIdx = 0;
+        coordA[coordIdx++] = 0.0f;
+        coordA[coordIdx++] = 0.0f;
+
+        // Angle increments between each point
+        float angInc = 2.0f * M_PI / static_cast<float>(numStepsFan);
+        float cosInc = cos(angInc);
+        float sinInc = sin(angInc);
+
+        // Starting point
+        coordA[coordIdx++] = radius;
+        coordA[coordIdx++] = 0.0f;
+
+        // Remaining points (determined via angle)
+        float xc = radius;
+        float yc = 0.0f;
+        for (unsigned iDiv = 1; iDiv < numStepsFan; ++iDiv) {
+            float xcNew = cosInc * xc - sinInc * yc;
+
+            yc = sinInc * xc + cosInc * yc;
+            xc = xcNew;
+
+            coordA[coordIdx++] = xcNew;
+            coordA[coordIdx++] = yc;
+        }
+
+        // End point
+        coordA[coordIdx++] = radius;
+        coordA[coordIdx++] = 0.0f;
+
+        // Apply offset
+        coordIdx = 0;
+        for (unsigned iDiv = 1; iDiv <= numStepsFan + 2; ++iDiv) {
+            coordA[coordIdx++] += offsetX;
+            coordA[coordIdx++] += offsetY;
+        }
+
+        vboCircle = 0;
+        glGenBuffers(1, &vboCircle);
+        glBindBuffer(GL_ARRAY_BUFFER, vboCircle);
+        glBufferData(GL_ARRAY_BUFFER, (numStepsFan + 2) * 2 * sizeof(GLfloat), coordA, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, 0);
+        glEnableVertexAttribArray(0);
+
+        delete[] coordA;
 
         // ----- RIGHT WING VIA TRIANGLE STRIP -----------------
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -60,13 +124,12 @@ public:
         glBindVertexArray(_vao[0]);
         glEnableVertexAttribArray(0);
 
-        // End and control points for Bezier curves
-        OpenGP::Vec3 startPointR = OpenGP::Vec3(0.62f, 0.8f, 0.0f);
-        OpenGP::Vec3 controlPointRAA = OpenGP::Vec3(0.635f, 0.87f, 0.0f);
-        OpenGP::Vec3 controlPointRAB = OpenGP::Vec3(0.685f, 0.84f, 0.0f);
-        OpenGP::Vec3 controlPointRBA = OpenGP::Vec3(0.635f, 0.82f, 0.0f);
-        OpenGP::Vec3 controlPointRBB = OpenGP::Vec3(0.685f, 0.82f, 0.0f);
-        OpenGP::Vec3 endPointR = OpenGP::Vec3(0.69f, 0.84f, 0.0f);
+        OpenGP::Vec3 startPointR = OpenGP::Vec3(0.04f, 0.0f, 0.0f);
+        OpenGP::Vec3 controlPointRAA = OpenGP::Vec3(0.07f, 0.14f, 0.0f);
+        OpenGP::Vec3 controlPointRAB = OpenGP::Vec3(0.17f, 0.08f, 0.0f);
+        OpenGP::Vec3 controlPointRBA = OpenGP::Vec3(0.07f, 0.04f, 0.0f);
+        OpenGP::Vec3 controlPointRBB = OpenGP::Vec3(0.17f, 0.04f, 0.0f);
+        OpenGP::Vec3 endPointR = OpenGP::Vec3(0.18f, 0.08f, 0.0f);
 
         OpenGP::Vec3 *pointsRightWingTop = new OpenGP::Vec3[numSteps];
         OpenGP::Vec3 *pointsRightWingBottom = new OpenGP::Vec3[numSteps];
@@ -83,10 +146,6 @@ public:
             // Right wing
             pointsRightWingTop[i] = getPointBezier(startPointR, controlPointRAA, controlPointRAB, endPointR, tR);
             pointsRightWingBottom[i] = getPointBezier(startPointR, controlPointRBA, controlPointRBB, endPointR, tR);
-
-
-            //std::cout << pointsRightWingTop[i](0) << " | " << pointsRightWingTop[i](1) << " \n ";
-            //std::cout << pointsRightWingBottom[i](0) << " | " << pointsRightWingBottom[i](1) << " \n ";
             tR += incrementR;
         }
 
@@ -118,7 +177,7 @@ public:
         pointTotalRight[indexVarR++] = endPointR(1);
 
         for (int i = 0; i < (numSteps - 1) * 2 * 2; i += 2) {
-            std::cout << "Right Wing Coordinates: \n" << pointTotalRight[i] << " | " << pointTotalRight[i + 1] << " \n ";
+            //std::cout << "Right Wing Coordinates: \n" << pointTotalRight[i] << " | " << pointTotalRight[i + 1] << " \n ";
         }
 
         vboWingRight = 0;
@@ -139,13 +198,13 @@ public:
         glBindVertexArray(_vao[1]);
         glEnableVertexAttribArray(0);
 
-        // End and control points for Bezier curves
-        OpenGP::Vec3 startPointL = OpenGP::Vec3(0.58f, 0.8f, 0.0f);
-        OpenGP::Vec3 controlPointLAA = OpenGP::Vec3(0.565f, 0.87f, 0.0f);
-        OpenGP::Vec3 controlPointLAB = OpenGP::Vec3(0.515f, 0.84f, 0.0f);
-        OpenGP::Vec3 controlPointLBA = OpenGP::Vec3(0.565f, 0.82f, 0.0f);
-        OpenGP::Vec3 controlPointLBB = OpenGP::Vec3(0.515f, 0.82f, 0.0f);
-        OpenGP::Vec3 endPointL = OpenGP::Vec3(0.51f, 0.84f, 0.0f);
+        OpenGP::Vec3 startPointL = OpenGP::Vec3(-0.04f, 0.0f, 0.0f);
+        OpenGP::Vec3 controlPointLAA = OpenGP::Vec3(-0.07f, 0.14f, 0.0f);
+        OpenGP::Vec3 controlPointLAB = OpenGP::Vec3(-0.17f, 0.08f, 0.0f);
+        OpenGP::Vec3 controlPointLBA = OpenGP::Vec3(-0.07f, 0.04f, 0.0f);
+        OpenGP::Vec3 controlPointLBB = OpenGP::Vec3(-0.17f, 0.04f, 0.0f);
+        OpenGP::Vec3 endPointL = OpenGP::Vec3(-0.18f, 0.08f, 0.0f);
+
 
 
         OpenGP::Vec3 *pointsLeftWingTop = new OpenGP::Vec3[numSteps];
@@ -196,7 +255,7 @@ public:
         pointTotalLeft[indexVarL++] = endPointL(1);
 
         for (int i = 0; i < (numSteps - 1) * 2 * 2; i += 2) {
-            std::cout << "Left Wing Coordinates: \n" << pointTotalLeft[i] << " | " << pointTotalLeft[i + 1] << " \n ";
+            //std::cout << "Left Wing Coordinates: \n" << pointTotalLeft[i] << " | " << pointTotalLeft[i + 1] << " \n ";
         }
 
         vboWingRight = 0;
@@ -376,7 +435,13 @@ public:
 
         check_error_gl();
         ///--- Draw
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
+
+        if (vaoIndex == 0 || vaoIndex == 1) {
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, (numSteps - 1) * 2);
+        } else {
+            glDrawArrays(GL_TRIANGLE_FAN, 0, numStepsFan + 2);
+        }
+
         //glDrawElements(GL_TRIANGLES,  numVertices,
         //            GL_UNSIGNED_INT,
         //            0 );

@@ -10,5 +10,6 @@ uniform int hasTextures;
 uniform sampler2D texImage;
 
 void main() {
-    FragColor = texture(texImage,uv).rgba;
+    FragColor = vec4(0.83, 0.69, 0.22, 1.0);
+            //texture(texImage,uv).rgba;
 }
