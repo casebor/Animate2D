@@ -58,7 +58,7 @@ static OpenGP::Vec3 controlPointPathA;
 static OpenGP::Vec3 controlPointPathB;
 static OpenGP::Vec3 endPointPath;
 
-static int numSteps = 20;
+static int numSteps = 50;
 static Vec2 position = Vec2(0,0);
 static Vec2 *selection = nullptr;
 
@@ -139,6 +139,7 @@ int main(int, char**) {
         // Draw line red
         curveShader->set_uniform("selection", -1);
         curve->set_attributes(*curveShader);
+        if(selection!=nullptr) curveShader->set_uniform("selection", int(selection-&bezierPoints[0]));
         curve->set_mode(GL_LINE_STRIP);
         curve->draw();
 
