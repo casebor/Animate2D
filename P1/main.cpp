@@ -93,7 +93,7 @@ int main(int, char**) {
 	Window& window = app.create_window([&](Window&) {
         glViewport(0, 0, width*2, height*2);
 
-        // ----- Setup background
+        // ----- Draw background
         // Bind framebuffer and draw background
 		fb->bind();
 		glClear(GL_COLOR_BUFFER_BIT);
@@ -117,7 +117,6 @@ int main(int, char**) {
 		fbShader->unbind();
 
         // ----- Draw control points
-        //glClear(GL_COLOR_BUFFER_BIT);
         glPointSize(POINTSIZE);
         lineShader->bind();
 
@@ -135,9 +134,6 @@ int main(int, char**) {
         lineShader->unbind();
 
         // ----- Draw bezier curve
-        //glClear(GL_COLOR_BUFFER_BIT);
-
-
         curveShader->bind();
 
         // Draw line red
@@ -158,11 +154,6 @@ int main(int, char**) {
             controlPointPathA = OpenGP::Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
             controlPointPathB = OpenGP::Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
             endPointPath = OpenGP::Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
-
-            //startPointPath = OpenGP::Vec3(0.9f, 0.5f, 0.0f);
-            //controlPointPathA = OpenGP::Vec3(0.8f, -0.1f, 0.0f);
-            //controlPointPathB = OpenGP::Vec3(0.6f, -0.2f, 0.0f);
-            //endPointPath = OpenGP::Vec3(-0.8f, 0.98f, 0.0f);
         } else {
             timeOffset = static_cast<float>(glfwGetTime());
             time_s = 0.0f;
@@ -187,8 +178,6 @@ int main(int, char**) {
         tempPosition = getPointBezier(startPointPath, controlPointPathA, controlPointPathB, endPointPath, tPathPosition);
         pointX = tempPosition(0);
         pointY = tempPosition(1);
-
-        //std::cout << pointX << " | " << pointY << " \n ";
 
         // Initialize transformation matrix
         Transform snitch_m = Transform::Identity();
@@ -222,7 +211,6 @@ int main(int, char**) {
 
         snitch.draw(snitch_mRightWing.matrix(), 0);
         snitch.draw(snitch_mLeftWing.matrix(), 1);
-
 	});
 
     window.set_title("Golden Snitch Animation");
@@ -245,7 +233,7 @@ int main(int, char**) {
                 Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
                 Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
                 Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
-                Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+                Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, (static_cast<float>(i) / static_cast<float>(numSteps)));
                 Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
                 bezierPoints.push_back(temp2V);
             }
@@ -266,6 +254,7 @@ int main(int, char**) {
                 }
             }
         }
+
         // Mouse release case
         if( e.button == GLFW_MOUSE_BUTTON_LEFT && e.released) {
             if(selection) {
@@ -280,7 +269,7 @@ int main(int, char**) {
                     Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
                     Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
                     Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
-                    Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+                    Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, (static_cast<float>(i) / static_cast<float>(numSteps)));
                     Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
                     bezierPoints.push_back(temp2V);
                 }
@@ -356,7 +345,6 @@ void init() {
     line->set_triangles(indices);
 
     // ----- BEZIER PATH POINTS
-    //bezierPoints.push_back(Vec2(0.9f, 0.5f));
     // Generate vertices for bezier path
     curveShader = std::unique_ptr<Shader>(new Shader());
     curveShader->verbose = true;
@@ -368,7 +356,7 @@ void init() {
         Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
         Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
         Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
-        Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+        Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, (static_cast<float>(i) / static_cast<float>(numSteps)));
         Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
         bezierPoints.push_back(temp2V);
     }
@@ -380,8 +368,6 @@ void init() {
         indicesCurve.push_back(i);
     }
     curve->set_triangles(indicesCurve);
-
-
 }
 
 // Initialize quad (background)
@@ -433,14 +419,11 @@ void loadTexture(std::unique_ptr<RGBA8Texture>& texture, const char* filename) {
 
 // Get Bezier point for a given curve
 Vec3 getPointBezier(Vec3 startPoint, Vec3 controlPointA, Vec3 controlPointB, Vec3 endPoint, float t)
-//Vec2 getPointBezier(Vec2 startPoint, Vec2controlPointA, Vec2 controlPointB, Vec2 endPoint, float t)
 {
     float tempT = (1.0f - t) * (1.0f - t);
 
     Vec3 point = (tempT * (1.0f - t) * startPoint) + (3.0f * t * tempT * controlPointA) +
             (3.0f * t * t * (1.0f - t) * controlPointB) + (t * t * t * endPoint);
-
-    //std::cout << point(0) << " | " << point(1) << " | " << point(2) << " \n ";
 
     return point;
 }
@@ -471,6 +454,3 @@ void drawBackground()
 
     glDisable(GL_BLEND);
 }
-
-
-
