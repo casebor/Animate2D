@@ -5,7 +5,15 @@
 
 using namespace OpenGP;
 
+#define POINTSIZE 10.0f
+
 // Shader constants
+static const char* line_vshader =
+#include "line_vshader.glsl"
+;
+static const char* line_fshader =
+#include "line_fshader.glsl"
+;
 static const char* fb_vshader =
 #include "fb_vshader.glsl"
 ;
@@ -44,6 +52,24 @@ static bool flag;
 const int width = 720, height = 720;
 typedef Eigen::Transform<float, 3, Eigen::Affine> Transform;
 
+// Bezier path variables
+static OpenGP::Vec3 startPointPath;
+static OpenGP::Vec3 controlPointPathA;
+static OpenGP::Vec3 controlPointPathB;
+static OpenGP::Vec3 endPointPath;
+
+static int numSteps = 20;
+static Vec2 position = Vec2(0,0);
+static Vec2 *selection = nullptr;
+
+// Mouse control variables
+static std::unique_ptr<Shader> lineShader;
+static std::unique_ptr<Shader> curveShader;
+static std::unique_ptr<GPUMesh> line;
+static std::unique_ptr<GPUMesh> curve;
+static std::vector<Vec2> controlPoints;
+static std::vector<Vec2> bezierPoints;
+
 
 int main(int, char**) {
 
@@ -55,7 +81,7 @@ int main(int, char**) {
 
     // Initialize color buffer texture, and allocate memory
 	c_buf = std::unique_ptr<RGBA8Texture>(new RGBA8Texture());
-	c_buf->allocate(width, height);
+    c_buf->allocate(width*2, height*2);
 
     // Attach color texture to framebuffer
 	fb->attach_color_texture(*c_buf);
@@ -65,7 +91,7 @@ int main(int, char**) {
     int timeAdj = 0.0;
 
 	Window& window = app.create_window([&](Window&) {
-		glViewport(0, 0, width, height);
+        glViewport(0, 0, width*2, height*2);
 
         // ----- Setup background
         // Bind framebuffer and draw background
@@ -83,21 +109,60 @@ int main(int, char**) {
 		c_buf->bind();
 		fbShader->set_uniform("tex", 0);
         fbShader->set_uniform("tex_width", float(width));
-		fbShader->set_uniform("tex_height", float(height));
+        fbShader->set_uniform("tex_height", float(height));
         quad->set_attributes(*fbShader);
         quad->draw();
 
 		c_buf->unbind();
 		fbShader->unbind();
 
+        // ----- Draw control points
+        //glClear(GL_COLOR_BUFFER_BIT);
+        glPointSize(POINTSIZE);
+        lineShader->bind();
+
+        // Draw line red
+        lineShader->set_uniform("selection", -1);
+        line->set_attributes(*lineShader);
+        line->set_mode(GL_LINE_STRIP);
+        line->draw();
+
+        // Draw points red and selected point blue
+        if(selection!=nullptr) lineShader->set_uniform("selection", int(selection-&controlPoints[0]));
+        line->set_mode(GL_POINTS);
+        line->draw();
+
+        lineShader->unbind();
+
+        // ----- Draw bezier curve
+        //glClear(GL_COLOR_BUFFER_BIT);
+
+
+        curveShader->bind();
+
+        // Draw line red
+        curveShader->set_uniform("selection", -1);
+        curve->set_attributes(*curveShader);
+        curve->set_mode(GL_LINE_STRIP);
+        curve->draw();
+
+        curveShader->unbind();
+
         // ----- Setup transformation hierarchies for Circle
-        OpenGP::Vec3 startPointPath = OpenGP::Vec3(1.0f, 0.5f, 0.0f);
-        OpenGP::Vec3 controlPointPathA = OpenGP::Vec3(0.8f, -0.1f, 0.0f);
-        OpenGP::Vec3 controlPointPathB = OpenGP::Vec3(0.6f, -0.2f, 0.0f);
-        OpenGP::Vec3 endPointPath = OpenGP::Vec3(-0.8f, 1.0f, 0.0f);
+        glViewport(0, 0, 2*width, 2*height);
+
         float time_s;
         if (flag) {
             time_s = static_cast<float>(glfwGetTime()) - timeOffset;
+            startPointPath = OpenGP::Vec3(controlPoints[0](0), controlPoints[0](1), 0.0f);
+            controlPointPathA = OpenGP::Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
+            controlPointPathB = OpenGP::Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
+            endPointPath = OpenGP::Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
+
+            //startPointPath = OpenGP::Vec3(0.9f, 0.5f, 0.0f);
+            //controlPointPathA = OpenGP::Vec3(0.8f, -0.1f, 0.0f);
+            //controlPointPathB = OpenGP::Vec3(0.6f, -0.2f, 0.0f);
+            //endPointPath = OpenGP::Vec3(-0.8f, 0.98f, 0.0f);
         } else {
             timeOffset = static_cast<float>(glfwGetTime());
             time_s = 0.0f;
@@ -118,13 +183,12 @@ int main(int, char**) {
         GLfloat pointX;
         GLfloat pointY;
 
-
         // Current path position
         tempPosition = getPointBezier(startPointPath, controlPointPathA, controlPointPathB, endPointPath, tPathPosition);
         pointX = tempPosition(0);
         pointY = tempPosition(1);
 
-        std::cout << pointX << " | " << pointY << " \n ";
+        //std::cout << pointX << " | " << pointY << " \n ";
 
         // Initialize transformation matrix
         Transform snitch_m = Transform::Identity();
@@ -158,10 +222,72 @@ int main(int, char**) {
 
         snitch.draw(snitch_mRightWing.matrix(), 0);
         snitch.draw(snitch_mLeftWing.matrix(), 1);
+
 	});
 
     window.set_title("Golden Snitch Animation");
 	window.set_size(width, height);
+
+    // Mouse movement callback
+    window.add_listener<MouseMoveEvent>([&](const MouseMoveEvent &m){
+        // Mouse position in clip coordinates
+        Vec2 p = 2.0f*(Vec2(m.position.x()/width,-m.position.y()/height) - Vec2(0.5f,-0.5f));
+        if( selection && (p-position).norm() > 0.0f) {
+            // Make selected control points move with cursor
+            //position = 2.0f*(Vec2(m.position.x()/width,-m.position.y()/height) - p);
+            selection->x() = 2.0f * (m.position.x()/width - 0.5f);
+            selection->y() = 2.0f * (-m.position.y()/height + 0.5f);
+            line->set_vbo<Vec2>("vposition", controlPoints);
+
+            bezierPoints.clear();
+            for (int i = 0; i < numSteps; i++) {
+                Vec3 tempA = Vec3(controlPoints[0](0), controlPoints[0](1), 0.0f);
+                Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
+                Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
+                Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
+                Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+                Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
+                bezierPoints.push_back(temp2V);
+            }
+            curve->set_vbo<Vec2>("vposition", bezierPoints);
+        }
+        position = p;
+    });
+
+    // Mouse click callback
+    window.add_listener<MouseButtonEvent>([&](const MouseButtonEvent &e){
+        // Mouse selection case
+        if( e.button == GLFW_MOUSE_BUTTON_LEFT && !e.released) {
+            selection = nullptr;
+            for(auto&& v : controlPoints) {
+                if ( (v-position).norm() < POINTSIZE/std::min(width,height) ) {
+                    selection = &v;
+                    break;
+                }
+            }
+        }
+        // Mouse release case
+        if( e.button == GLFW_MOUSE_BUTTON_LEFT && e.released) {
+            if(selection) {
+                selection->x() = position.x();
+                selection->y() = position.y();
+                selection = nullptr;
+                line->set_vbo<Vec2>("vposition", controlPoints);
+
+                bezierPoints.clear();
+                for (int i = 0; i < numSteps; i++) {
+                    Vec3 tempA = Vec3(controlPoints[0](0), controlPoints[0](1), 0.0f);
+                    Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
+                    Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
+                    Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
+                    Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+                    Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
+                    bezierPoints.push_back(temp2V);
+                }
+                curve->set_vbo<Vec2>("vposition", bezierPoints);
+            }
+        }
+    });
 
 	return app.run();
 }
@@ -211,6 +337,51 @@ void init() {
     quadTCoord.push_back(OpenGP::Vec2(1.0f, 0.0f));
     quadTCoord.push_back(OpenGP::Vec2(1.0f, 1.0f));
     quadTCoord.push_back(OpenGP::Vec2(0.0f, 1.0f));
+
+    // ----- BEZIER PATH CONTROL POINTS
+    lineShader = std::unique_ptr<Shader>(new Shader());
+    lineShader->verbose = true;
+    lineShader->add_vshader_from_source(line_vshader);
+    lineShader->add_fshader_from_source(line_fshader);
+    lineShader->link();
+
+    controlPoints.push_back(Vec2(0.9f, 0.5f));
+    controlPoints.push_back(Vec2(0.8f, -0.1f));
+    controlPoints.push_back(Vec2(0.6f, -0.2f));
+    controlPoints.push_back(Vec2(-0.8f, 0.98f));
+
+    line = std::unique_ptr<GPUMesh>(new GPUMesh());
+    line->set_vbo<Vec2>("vposition", controlPoints);
+    std::vector<unsigned int> indices = {0,1,2,3};
+    line->set_triangles(indices);
+
+    // ----- BEZIER PATH POINTS
+    //bezierPoints.push_back(Vec2(0.9f, 0.5f));
+    // Generate vertices for bezier path
+    curveShader = std::unique_ptr<Shader>(new Shader());
+    curveShader->verbose = true;
+    curveShader->add_vshader_from_source(line_vshader);
+    curveShader->add_fshader_from_source(line_fshader);
+    curveShader->link();
+    for (int i = 0; i < numSteps; i++) {
+        Vec3 tempA = Vec3(controlPoints[0](0), controlPoints[0](1), 0.0f);
+        Vec3 tempB = Vec3(controlPoints[1](0), controlPoints[1](1), 0.0f);
+        Vec3 tempC = Vec3(controlPoints[2](0), controlPoints[2](1), 0.0f);
+        Vec3 tempD = Vec3(controlPoints[3](0), controlPoints[3](1), 0.0f);
+        Vec3 temp3V = getPointBezier(tempA, tempB, tempC, tempD, ((float)i / (float)numSteps));
+        Vec2 temp2V = Vec2(temp3V(0), temp3V(1));
+        bezierPoints.push_back(temp2V);
+    }
+
+    curve = std::unique_ptr<GPUMesh>(new GPUMesh());
+    curve->set_vbo<Vec2>("vposition", bezierPoints);
+    std::vector<unsigned int> indicesCurve;
+    for (int i = 0; i < numSteps; i++) {
+        indicesCurve.push_back(i);
+    }
+    curve->set_triangles(indicesCurve);
+
+
 }
 
 // Initialize quad (background)
@@ -277,6 +448,8 @@ Vec3 getPointBezier(Vec3 startPoint, Vec3 controlPointA, Vec3 controlPointB, Vec
 // Draw the scene
 void drawBackground()
 {
+
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -295,6 +468,7 @@ void drawBackground()
 
     background->unbind();
     quadShader->unbind();
+
     glDisable(GL_BLEND);
 }
 

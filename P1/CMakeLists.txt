@@ -10,6 +10,8 @@ endif()
 target_link_libraries(${EXERCISENAME} ${COMMON_LIBS})
 
 #--- data need to be copied to run folder
+file(COPY ${PROJECT_SOURCE_DIR}/P1/line_vshader.glsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY ${PROJECT_SOURCE_DIR}/P1/line_fshader.glsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/P1/Snitch_vshader.glsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/P1/Snitch_wing_fshader.glsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/P1/Snitch_body_fshader.glsl DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
